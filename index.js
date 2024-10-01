@@ -28,6 +28,19 @@ mongoose.connect('mongodb+srv://arindamsingh209:arindam@cluster1.29d0mug.mongodb
   useUnifiedTopology: true,
 });
 
+const authenticateToken = (req, res, next) => {
+    const token = req.headers['authorization']?.split(' ')[1]; // Get the token from the header
+
+    if (!token) return res.sendStatus(401); // No token, unauthorized
+
+    jwt.verify(token, process.env.ACCESS_TOKEN_SECRET, (err, user) => {
+        if (err) return res.sendStatus(403); // Token invalid, forbidden
+        req.user = user; // Save the user info from the token
+        next(); // Proceed to the next middleware or route handler
+    });
+};
+
+
 // Register User
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
@@ -62,21 +75,8 @@ app.post('/login', async (req, res) => {
   }
 });
 
-// User Profile
-app.get('/profile', (req, res) => {
-  const { token } = req.cookies; // Get token from cookies
-  if (!token) {
-    console.error('No JWT provided');
-    return res.status(401).json('No token provided');
-  }
-
-  jwt.verify(token, secret, {}, (err, info) => {
-    if (err) {
-      console.error('JWT verification error:', err);
-      return res.status(401).json('Unauthorized');
-    }
-    res.json(info);
-  });
+app.get('/profile', authenticateToken, (req, res) => {
+    res.json(req.user); // Send user info from the token
 });
 
 // Logout User
