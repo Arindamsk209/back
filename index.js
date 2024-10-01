@@ -28,25 +28,6 @@ mongoose.connect('mongodb+srv://arindamsingh209:arindam@cluster1.29d0mug.mongodb
   useUnifiedTopology: true,
 });
 
-const authenticateToken = (req, res, next) => {
-    const token = req.cookies.token;
-
-    console.log("Incoming Token:", token); // Debugging output
-
-    if (!token) {
-        console.error('No JWT provided');
-        return res.status(401).json('No token provided');
-    }
-
-    jwt.verify(token, secret, {}, (err, user) => {
-        if (err) {
-            console.error('JWT verification error:', err);
-            return res.status(401).json('Unauthorized');
-        }
-        req.user = user; // Attach user info to request
-        next(); // Proceed to the next middleware or route handler
-    });
-};
 
 
 // Register User
@@ -63,38 +44,31 @@ app.post('/register', async (req, res) => {
     res.status(400).json(e);
   }
 });
-// Login Page
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const userDoc = await User.findOne({ username });
-
-  // Check if user exists
+  
   if (!userDoc) {
     return res.status(400).json('User not found');
   }
-
-  // Compare password
+  
   const passOk = bcrypt.compareSync(password, userDoc.password);
   
   if (passOk) {
-    // Create JWT token
     jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
-      if (err) {
-        console.error('Failed to create token:', err);
-        return res.status(500).json({ error: 'Failed to create token' });
-      }
+      if (err) return res.status(500).json({ error: 'Failed to create token' });
       
       // Set cookie with secure option based on environment
       res.cookie('token', token, { 
         httpOnly: true, 
         secure: process.env.NODE_ENV === 'production', // Set secure only in production
-        sameSite: 'Lax', // Add SameSite attribute for CSRF protection
+        sameSite: 'None' // Adjust this based on your requirements
       }); 
       
-      // Respond with user info
       res.json({
         id: userDoc._id,
         username,
+        token,
       });
     });
   } else {
@@ -102,6 +76,23 @@ app.post('/login', async (req, res) => {
   }
 });
 
+// Middleware to authenticate token
+function authenticateToken(req, res, next) {
+  const token = req.cookies.token || req.headers['authorization']?.split(' ')[1]; // Get token from cookies or headers
+  console.log('Token:', token); // Debugging log
+  if (!token) {
+    return res.sendStatus(401); // No token
+  }
+
+  jwt.verify(token, secret, (err, user) => {
+    if (err) {
+      console.error('JWT verification error:', err);
+      return res.sendStatus(403); // Token is no longer valid
+    }
+    req.user = user; // Attach user info to the request
+    next(); // Proceed to the next middleware or route handler
+  });
+}
 
 app.get('/profile', authenticateToken, (req, res) => {
     res.json(req.user); // Send user info from the token
