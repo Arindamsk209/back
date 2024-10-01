@@ -12,7 +12,12 @@ const salt = bcrypt.genSaltSync(10);
 const secret = 'asdfe45we45w345wegw345werjktjwertkj';
 const port = process.env.PORT || 4000;
 
-app.use(cors({ credentials: true, origin: 'http://localhost:5173' }));
+app.use(cors({
+  credentials: true,
+  origin: ['https://fascinating-truffle-d8d0b4.netlify.app'], // Ensure only the front-end is allowed
+  methods: ['GET', 'POST', 'PUT', 'DELETE'],
+  
+}));
 app.use(express.json());
 app.use(cookieParser());
 
