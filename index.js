@@ -4,7 +4,6 @@ const mongoose = require("mongoose");
 const User = require('./models/User');
 const Post = require('./models/Post');
 const bcrypt = require('bcryptjs');
-const app = express();
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 
@@ -12,18 +11,24 @@ const salt = bcrypt.genSaltSync(10);
 const secret = 'asdfe45we45w345wegw345werjktjwertkj';
 const port = process.env.PORT || 4000;
 
+const app = express();
+
+// Middleware
 app.use(cors({
   credentials: true,
   origin: ['https://fascinating-truffle-d8d0b4.netlify.app'], // Ensure only the front-end is allowed
   methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  
 }));
 app.use(express.json());
 app.use(cookieParser());
 
-mongoose.connect('mongodb+srv://arindamsingh209:arindam@cluster1.29d0mug.mongodb.net/?retryWrites=true&w=majority');
+// Connect to MongoDB
+mongoose.connect('mongodb+srv://arindamsingh209:arindam@cluster1.29d0mug.mongodb.net/?retryWrites=true&w=majority', {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+});
 
-// Register Page
+// Register User
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
   try {
@@ -38,44 +43,55 @@ app.post('/register', async (req, res) => {
   }
 });
 
-// Login Page
+// Login User
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
   const userDoc = await User.findOne({ username });
+  if (!userDoc) return res.status(400).json('User not found');
+
   const passOk = bcrypt.compareSync(password, userDoc.password);
   if (passOk) {
-    // logged in
-    jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
-      if (err) throw err;
-      res.cookie('token', token).json({
-        id: userDoc._id,
-        username,
-      });
+    // Create JWT
+    const token = jwt.sign({ username, id: userDoc._id }, secret);
+    res.cookie('token', token, { httpOnly: true }).json({
+      id: userDoc._id,
+      username,
     });
   } else {
-    res.status(400).json('wrong credentials');
+    res.status(400).json('Wrong credentials');
   }
 });
 
-// User information header
+// User Profile
 app.get('/profile', (req, res) => {
-  const { token } = req.cookies;
+  const { token } = req.cookies; // Get token from cookies
+  if (!token) {
+    console.error('No JWT provided');
+    return res.status(401).json('No token provided');
+  }
+
   jwt.verify(token, secret, {}, (err, info) => {
-    if (err) throw err;
+    if (err) {
+      console.error('JWT verification error:', err);
+      return res.status(401).json('Unauthorized');
+    }
     res.json(info);
   });
 });
 
+// Logout User
 app.post('/logout', (req, res) => {
-  res.cookie('token', '').json('ok');
+  res.cookie('token', '', { httpOnly: true }).json('ok');
 });
 
-// Create Post Page
+// Create Post
 app.post('/post', async (req, res) => {
   const { title, summary, content, cover } = req.body; // Get cover image URL from request
   const { token } = req.cookies;
+  if (!token) return res.status(401).json('No token provided');
+
   jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) throw err;
+    if (err) return res.status(401).json('Unauthorized');
 
     const postDoc = await Post.create({
       title,
@@ -92,13 +108,17 @@ app.post('/post', async (req, res) => {
 app.put('/post', async (req, res) => {
   const { id, title, summary, content, cover } = req.body; // Get cover image URL from request
   const { token } = req.cookies;
+  if (!token) return res.status(401).json('No token provided');
+
   jwt.verify(token, secret, {}, async (err, info) => {
-    if (err) throw err;
+    if (err) return res.status(401).json('Unauthorized');
+    
     const postDoc = await Post.findById(id);
+    if (!postDoc) return res.status(404).json('Post not found');
+
     const isAuthor = JSON.stringify(postDoc.author) === JSON.stringify(info.id);
-    if (!isAuthor) {
-      return res.status(400).json('you are not the author');
-    }
+    if (!isAuthor) return res.status(403).json('You are not the author');
+
     await postDoc.updateOne({
       title,
       summary,
@@ -110,7 +130,7 @@ app.put('/post', async (req, res) => {
   });
 });
 
-// Show the post at home page
+// Show Posts
 app.get('/post', async (req, res) => {
   res.json(
     await Post.find()
@@ -120,13 +140,15 @@ app.get('/post', async (req, res) => {
   );
 });
 
-// Post Page
+// Show Single Post
 app.get('/post/:id', async (req, res) => {
   const { id } = req.params;
   const postDoc = await Post.findById(id).populate('author', ['username']);
+  if (!postDoc) return res.status(404).json('Post not found');
   res.json(postDoc);
 });
 
+// Start Server
 app.listen(port, () => {
-  console.log('Server is running on port 4000');
+  console.log(`Server is running on port ${port}`);
 });
