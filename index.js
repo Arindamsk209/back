@@ -88,8 +88,7 @@ app.get('/profile/:username', async (req, res) => {
 
 // Logout endpoint
 app.post('/logout', (req, res) => {
-  // Clear user session or related data here (if applicable)
-  req.session = null; // Clearing session (for demonstration)
+  // Handle any necessary logout logic here
   res.json({ message: 'Logout successful' });
 });
 
