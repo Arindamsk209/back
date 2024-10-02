@@ -10,7 +10,7 @@ const Post = require('./models/Post');
 // Constants
 const salt = bcrypt.genSaltSync(10);
 const secret = process.env.JWT_SECRET;
-const port = process.env.PORT;
+const port = process.env.PORT || 4000;
 
 const app = express();
 
@@ -109,6 +109,17 @@ app.post('/post', authenticateToken, async (req, res) => {
   } catch (err) {
     console.error('Error creating post:', err);
     res.status(500).json({ error: 'Post creation failed', details: err });
+  }
+});
+
+// Get All Posts
+app.get('/post', authenticateToken, async (req, res) => {
+  try {
+    const posts = await Post.find().populate('author', 'username');
+    res.json(posts);
+  } catch (err) {
+    console.error('Error fetching posts:', err);
+    res.status(500).json({ error: 'Failed to fetch posts', details: err });
   }
 });
 
