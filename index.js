@@ -96,11 +96,12 @@ app.post('/logout', (req, res) => {
 
 // Create Post endpoint
 app.post('/post', async (req, res) => {
-  const { title, content, authorId } = req.body; // Include authorId from the user context
-  const newPost = new Post({ title, content, author: authorId });
+  const { title, content, cover, authorId } = req.body; // Include authorId from the user context
+  const newPost = new Post({ title, content, cover, author: authorId });
   await newPost.save();
   res.json(newPost);
 });
+
 
 // Fetch Posts endpoint
 app.get('/post', async (req, res) => {
