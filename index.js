@@ -8,7 +8,7 @@ const User = require('./models/User');
 const Post = require('./models/Post');
 
 // Constants
-
+const salt = bcrypt.genSaltSync(10);
 const port = process.env.PORT || 4000;
 
 const app = express();
@@ -32,12 +32,26 @@ mongoose.connect(process.env.MONGO_URI, {
 // Registration endpoint
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
+
+  // Check if the username already exists
+  const existingUser = await User.findOne({ username });
+  if (existingUser) {
+    return res.status(400).json({ error: 'Username already taken' });
+  }
+
+  // Hash the password
   const hashedPassword = bcrypt.hashSync(password, 10);
   
+  // Create a new user instance
   const newUser = new User({ username, password: hashedPassword });
+
+  // Save the new user to the database
   await newUser.save();
+  
+  // Send a response back to the client
   res.json({ username });
 });
+
 
 // Login endpoint
 app.post('/login', async (req, res) => {
