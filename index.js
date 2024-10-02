@@ -73,17 +73,19 @@ app.post('/login', async (req, res) => {
 });
 
 // Profile endpoint
-app.get('/profile', async (req, res) => {
-  const userId = req.session?.userId; // Assuming you're using a temporary session
-  if (!userId) return res.status(401).json('Unauthorized');
+// Profile endpoint to get user info by username
+app.get('/profile/:username', async (req, res) => {
+  const { username } = req.params; // Extract username from URL parameters
+  const userDoc = await User.findOne({ username });
 
-  const userDoc = await User.findById(userId);
   if (!userDoc) {
     return res.status(404).json('User not found');
   }
 
-  res.json({ id: userDoc._id, username: userDoc.username });
+  // If user found, return user info without password
+  res.json({ username: userDoc.username });
 });
+
 
 // Logout endpoint
 app.post('/logout', (req, res) => {
