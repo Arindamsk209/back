@@ -6,7 +6,6 @@ const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
 const User = require('./models/User');
 const Post = require('./models/Post');
-
 // Constants
 const salt = bcrypt.genSaltSync(10);
 const port = process.env.PORT || 4000;
@@ -105,7 +104,9 @@ app.post('/post', async (req, res) => {
 
 // Fetch Posts endpoint
 app.get('/post', async (req, res) => {
-  const posts = await Post.find().populate('author', 'username'); // Populate author information
+  const posts = await Post.find()
+    .populate('author', 'username')
+    .sort({ createdAt: -1 }); // Sort by createdAt field in descending order
   res.json(posts);
 });
 
