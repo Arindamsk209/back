@@ -96,8 +96,8 @@ app.post('/logout', (req, res) => {
 
 // Create Post endpoint
 app.post('/post', async (req, res) => {
-  const { title, content, cover, authorId } = req.body; // Include authorId from the user context
-  const newPost = new Post({ title, content, cover, author: authorId });
+  const { title, summary, content, cover, authorId } = req.body; // Include summary
+  const newPost = new Post({ title, summary, content, cover, author: authorId }); // Add summary here
   await newPost.save();
   res.json(newPost);
 });
@@ -120,13 +120,14 @@ app.get('/post/:id', async (req, res) => {
 
 // Update Post endpoint
 app.put('/post', async (req, res) => {
-  const { id, title, content, cover } = req.body;
-  const updatedPost = await Post.findByIdAndUpdate(id, { title, content, cover }, { new: true });
+  const { id, title, summary, content, cover } = req.body; // Include summary
+  const updatedPost = await Post.findByIdAndUpdate(id, { title, summary, content, cover }, { new: true }); // Update summary here
   if (!updatedPost) {
     return res.status(404).json('Post not found');
   }
   res.json(updatedPost);
 });
+
 // Start the Server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
