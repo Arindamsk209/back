@@ -10,7 +10,7 @@ const Post = require('./models/Post');
 // Constants
 const salt = bcrypt.genSaltSync(10);
 const secret = process.env.JWT_SECRET;
-const port = process.env.PORT || 4000;
+const port = process.env.PORT;
 
 const app = express();
 
@@ -56,7 +56,7 @@ app.post('/login', async (req, res) => {
     const isPasswordValid = bcrypt.compareSync(password, userDoc.password);
     if (isPasswordValid) {
       const token = jwt.sign({ username, id: userDoc._id }, secret, { expiresIn: '1h' });
-      
+
       res.cookie('token', token, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
