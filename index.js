@@ -1,12 +1,13 @@
 const express = require('express');
 const cors = require('cors');
-const mongoose = require("mongoose");
-const User = require('./models/User');
-const Post = require('./models/Post');
+const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 const jwt = require('jsonwebtoken');
 const cookieParser = require('cookie-parser');
+const User = require('./models/User');
+const Post = require('./models/Post');
 
+// Constants
 const salt = bcrypt.genSaltSync(10);
 const secret = process.env.JWT_SECRET;
 const port = process.env.PORT || 4000;
@@ -22,68 +23,67 @@ app.use(cors({
 app.use(express.json());
 app.use(cookieParser());
 
-// Connect to MongoDB
-mongoose.connect('mongodb+srv://arindamsingh209:arindam@cluster1.29d0mug.mongodb.net/?retryWrites=true&w=majority', {
+// MongoDB Connection
+mongoose.connect(process.env.MONGO_URI, {
   useNewUrlParser: true,
   useUnifiedTopology: true,
-});
+})
+  .then(() => console.log('Connected to MongoDB'))
+  .catch((err) => console.error('MongoDB connection error:', err));
 
 // Register User
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
   try {
-    const userDoc = await User.create({
-      username,
-      password: bcrypt.hashSync(password, salt),
-    });
+    const hashedPassword = bcrypt.hashSync(password, salt);
+    const userDoc = await User.create({ username, password: hashedPassword });
     res.json(userDoc);
-  } catch (e) {
-    console.log(e);
-    res.status(400).json(e);
+  } catch (err) {
+    console.error('Error registering user:', err);
+    res.status(400).json({ error: 'Registration failed', details: err });
   }
 });
 
 // Login User
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  const userDoc = await User.findOne({ username });
+  try {
+    const userDoc = await User.findOne({ username });
+    if (!userDoc) {
+      return res.status(400).json('User not found');
+    }
 
-  if (!userDoc) {
-    return res.status(400).json('User not found');
-  }
-
-  const passOk = bcrypt.compareSync(password, userDoc.password);
-
-  if (passOk) {
-    jwt.sign({ username, id: userDoc._id }, secret, {}, (err, token) => {
-      if (err) return res.status(500).json({ error: 'Failed to create token' });
-
+    const isPasswordValid = bcrypt.compareSync(password, userDoc.password);
+    if (isPasswordValid) {
+      const token = jwt.sign({ username, id: userDoc._id }, secret, { expiresIn: '1h' });
+      
       res.cookie('token', token, {
         httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Set secure only in production
-        sameSite: 'None', // Required for cross-site cookies
+        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
+        sameSite: 'None', // Enable cross-site cookies
       });
 
-      res.json({
-        id: userDoc._id,
-        username,
-        token,
-      });
-    });
-  } else {
-    res.status(400).json('Wrong credentials');
+      res.json({ id: userDoc._id, username, token });
+    } else {
+      res.status(400).json('Wrong credentials');
+    }
+  } catch (err) {
+    console.error('Error during login:', err);
+    res.status(500).json({ error: 'Login failed', details: err });
   }
 });
 
-// Middleware to authenticate token
+// JWT Authentication Middleware
 function authenticateToken(req, res, next) {
   const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
   if (!token) {
-    return res.sendStatus(401);
+    return res.status(401).json({ error: 'Unauthorized: No token provided' });
   }
 
   jwt.verify(token, secret, (err, user) => {
-    if (err) return res.sendStatus(403);
+    if (err) {
+      return res.status(403).json({ error: 'Forbidden: Invalid token' });
+    }
     req.user = user;
     next();
   });
@@ -94,25 +94,25 @@ app.get('/profile', authenticateToken, (req, res) => {
   res.json(req.user);
 });
 
-// Logout User
-app.post('/logout', (req, res) => {
-  res.cookie('token', '', { httpOnly: true, sameSite: 'None', secure: true }).json('ok');
-});
-
-// Remaining Routes (Create, Edit Post, etc.)
+// Create Post Route (Authenticated)
 app.post('/post', authenticateToken, async (req, res) => {
   const { title, summary, content, cover } = req.body;
-  const postDoc = await Post.create({
-    title,
-    summary,
-    content,
-    cover,
-    author: req.user.id,
-  });
-  res.json(postDoc);
+  try {
+    const postDoc = await Post.create({
+      title,
+      summary,
+      content,
+      cover,
+      author: req.user.id,
+    });
+    res.json(postDoc);
+  } catch (err) {
+    console.error('Error creating post:', err);
+    res.status(500).json({ error: 'Post creation failed', details: err });
+  }
 });
 
-// Start Server
+// Start the Server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
 });
