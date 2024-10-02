@@ -8,8 +8,7 @@ const User = require('./models/User');
 const Post = require('./models/Post');
 
 // Constants
-const salt = bcrypt.genSaltSync(10);
-const secret = process.env.JWT_SECRET;
+
 const port = process.env.PORT || 4000;
 
 const app = express();
@@ -30,99 +29,87 @@ mongoose.connect(process.env.MONGO_URI, {
 })
   .then(() => console.log('Connected to MongoDB'))
   .catch((err) => console.error('MongoDB connection error:', err));
-
-// Register User
+// Registration endpoint
 app.post('/register', async (req, res) => {
   const { username, password } = req.body;
-  try {
-    const hashedPassword = bcrypt.hashSync(password, salt);
-    const userDoc = await User.create({ username, password: hashedPassword });
-    res.json(userDoc);
-  } catch (err) {
-    console.error('Error registering user:', err);
-    res.status(400).json({ error: 'Registration failed', details: err });
-  }
+  const hashedPassword = bcrypt.hashSync(password, 10);
+  
+  const newUser = new User({ username, password: hashedPassword });
+  await newUser.save();
+  res.json({ username });
 });
 
-// Login User
+// Login endpoint
 app.post('/login', async (req, res) => {
   const { username, password } = req.body;
-  try {
-    const userDoc = await User.findOne({ username });
-    if (!userDoc) {
-      return res.status(400).json('User not found');
-    }
+  const userDoc = await User.findOne({ username });
 
-    const isPasswordValid = bcrypt.compareSync(password, userDoc.password);
-    if (isPasswordValid) {
-      const token = jwt.sign({ username, id: userDoc._id }, secret, { expiresIn: '1h' });
+  if (!userDoc) {
+    return res.status(400).json('User not found');
+  }
 
-      res.cookie('token', token, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production', // Use secure cookies in production
-        sameSite: 'None', // Enable cross-site cookies
-      });
-
-      res.json({ id: userDoc._id, username, token });
-    } else {
-      res.status(400).json('Wrong credentials');
-    }
-  } catch (err) {
-    console.error('Error during login:', err);
-    res.status(500).json({ error: 'Login failed', details: err });
+  const isPasswordValid = bcrypt.compareSync(password, userDoc.password);
+  if (isPasswordValid) {
+    // You can store user data in memory if needed, but this is not a recommended practice for production
+    req.session = { userId: userDoc._id, username }; // Temporary storage
+    res.json({ id: userDoc._id, username }); // Return user info directly
+  } else {
+    res.status(400).json('Wrong credentials');
   }
 });
 
-// JWT Authentication Middleware
-function authenticateToken(req, res, next) {
-  const token = req.cookies.token || req.headers['authorization']?.split(' ')[1];
-  if (!token) {
-    return res.status(401).json({ error: 'Unauthorized: No token provided' });
+// Profile endpoint
+app.get('/profile', async (req, res) => {
+  const userId = req.session?.userId; // Assuming you're using a temporary session
+  if (!userId) return res.status(401).json('Unauthorized');
+
+  const userDoc = await User.findById(userId);
+  if (!userDoc) {
+    return res.status(404).json('User not found');
   }
 
-  jwt.verify(token, secret, (err, user) => {
-    if (err) {
-      return res.status(403).json({ error: 'Forbidden: Invalid token' });
-    }
-    req.user = user;
-    next();
-  });
-}
-
-// Profile Route
-app.get('/profile', authenticateToken, (req, res) => {
-  res.json(req.user);
+  res.json({ id: userDoc._id, username: userDoc.username });
 });
 
-// Create Post Route (Authenticated)
-app.post('/post', authenticateToken, async (req, res) => {
-  const { title, summary, content, cover } = req.body;
-  try {
-    const postDoc = await Post.create({
-      title,
-      summary,
-      content,
-      cover,
-      author: req.user.id,
-    });
-    res.json(postDoc);
-  } catch (err) {
-    console.error('Error creating post:', err);
-    res.status(500).json({ error: 'Post creation failed', details: err });
+// Logout endpoint
+app.post('/logout', (req, res) => {
+  // Clear user session or related data here (if applicable)
+  req.session = null; // Clearing session (for demonstration)
+  res.json({ message: 'Logout successful' });
+});
+
+// Create Post endpoint
+app.post('/post', async (req, res) => {
+  const { title, content, authorId } = req.body; // Include authorId from the user context
+  const newPost = new Post({ title, content, author: authorId });
+  await newPost.save();
+  res.json(newPost);
+});
+
+// Fetch Posts endpoint
+app.get('/post', async (req, res) => {
+  const posts = await Post.find().populate('author', 'username'); // Populate author information
+  res.json(posts);
+});
+
+// Get Post by ID
+app.get('/post/:id', async (req, res) => {
+  const post = await Post.findById(req.params.id).populate('author', 'username');
+  if (!post) {
+    return res.status(404).json('Post not found');
   }
+  res.json(post);
 });
 
-// Get All Posts
-app.get('/post', authenticateToken, async (req, res) => {
-  try {
-    const posts = await Post.find().populate('author', 'username');
-    res.json(posts);
-  } catch (err) {
-    console.error('Error fetching posts:', err);
-    res.status(500).json({ error: 'Failed to fetch posts', details: err });
+// Update Post endpoint
+app.put('/post', async (req, res) => {
+  const { id, title, content, cover } = req.body;
+  const updatedPost = await Post.findByIdAndUpdate(id, { title, content, cover }, { new: true });
+  if (!updatedPost) {
+    return res.status(404).json('Post not found');
   }
+  res.json(updatedPost);
 });
-
 // Start the Server
 app.listen(port, () => {
   console.log(`Server is running on port ${port}`);
